@@ -4,7 +4,8 @@
 
 - **Spiel erstellen** → Raumcode wird angezeigt, an den Mitspieler weitergeben.
 - **Spiel beitreten** → Raumcode eingeben.
-- WASD bewegen · Maus umsehen · Linksklick schießen · Leertaste springen.
+- Desktop: WASD bewegen · Maus umsehen · Linksklick schießen · Leertaste springen.
+- Handy/Tablet (Touch): links wischen = bewegen, rechts wischen = umsehen, Tasten FEUER und SPRUNG. Am besten im Querformat.
 - 3 Treffer = 1 Kill, wer zuerst 3 Kills hat, gewinnt. Der Host verwaltet Treffer, Leben und Punkte.
 
 ## Entwickeln

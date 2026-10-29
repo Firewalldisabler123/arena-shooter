@@ -70,6 +70,11 @@ export class Game {
     this.opp = 1 - this.me;
     this.onLeave = onLeave;
     this.running = true;
+    this.touch = document.body.classList.contains('touch');
+    this.stick = { x: 0, y: 0 };
+    this.look = { id: null, x: 0, y: 0 };
+    this.stickTouch = { id: null, x: 0, y: 0 };
+    this.btnTouch = { fire: null, jump: null };
 
     // --- Spielzustand (Host ist maßgeblich, Gast bekommt Kopien) ---
     this.st = this.freshState();
@@ -105,7 +110,7 @@ export class Game {
   // ---------------------------------------------------------------- Grafik
   initGraphics(canvas) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-    this.renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    this.renderer.setPixelRatio(Math.min(devicePixelRatio, this.touch ? 1.5 : 2));
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x03040c);
     this.scene.fog = new THREE.Fog(0x03040c, 25, 75);
@@ -251,6 +256,7 @@ export class Game {
       clickOverlay: () => canvas.requestPointerLock(),
       blur: () => { this.keys = {}; this.firing = false; },
     };
+    if (this.touch) this.bindTouch();
     addEventListener('keydown', this.h.keydown);
     addEventListener('keyup', this.h.keyup);
     addEventListener('mousemove', this.h.mousemove);
@@ -261,8 +267,96 @@ export class Game {
     $('click').addEventListener('click', this.h.clickOverlay);
   }
 
+  // Touch: links wischen = laufen (Joystick), rechts wischen = umsehen, zwei Tasten für Feuer/Sprung.
+  bindTouch() {
+    const stickEl = $('stick');
+    const knob = $('knob');
+    const fireBtn = $('btn-fire');
+    const jumpBtn = $('btn-jump');
+    const MAX = 50;
+
+    const resetStick = () => {
+      this.stickTouch.id = null;
+      this.stick.x = 0;
+      this.stick.y = 0;
+      stickEl.classList.add('hidden');
+    };
+
+    const start = (e) => {
+      if (e.target.closest('#end, #click, #menu')) return;
+      e.preventDefault();
+      for (const t of e.changedTouches) {
+        if (fireBtn.contains(e.target)) {
+          this.btnTouch.fire = t.identifier;
+          this.firing = true;
+          fireBtn.classList.add('down');
+        } else if (jumpBtn.contains(e.target)) {
+          this.btnTouch.jump = t.identifier;
+          this.keys.Space = true;
+          jumpBtn.classList.add('down');
+        } else if (t.clientX < innerWidth / 2 && this.stickTouch.id === null) {
+          this.stickTouch = { id: t.identifier, x: t.clientX, y: t.clientY };
+          stickEl.style.left = `${t.clientX}px`;
+          stickEl.style.top = `${t.clientY}px`;
+          knob.style.transform = 'translate(0, 0)';
+          stickEl.classList.remove('hidden');
+        } else if (t.clientX >= innerWidth / 2 && this.look.id === null) {
+          this.look = { id: t.identifier, x: t.clientX, y: t.clientY };
+        }
+      }
+    };
+
+    const moveT = (e) => {
+      if (e.target.closest('#end, #click, #menu')) return;
+      e.preventDefault();
+      for (const t of e.changedTouches) {
+        if (t.identifier === this.stickTouch.id) {
+          let dx = t.clientX - this.stickTouch.x;
+          let dy = t.clientY - this.stickTouch.y;
+          const len = Math.hypot(dx, dy);
+          if (len > MAX) { dx = (dx / len) * MAX; dy = (dy / len) * MAX; }
+          this.stick.x = dx / MAX;
+          this.stick.y = dy / MAX;
+          knob.style.transform = `translate(${dx}px, ${dy}px)`;
+        } else if (t.identifier === this.look.id) {
+          this.yaw -= (t.clientX - this.look.x) * 0.006;
+          this.pitch = Math.max(-1.5, Math.min(1.5, this.pitch - (t.clientY - this.look.y) * 0.006));
+          this.look.x = t.clientX;
+          this.look.y = t.clientY;
+        }
+      }
+    };
+
+    const end = (e) => {
+      for (const t of e.changedTouches) {
+        if (t.identifier === this.stickTouch.id) resetStick();
+        if (t.identifier === this.look.id) this.look.id = null;
+        if (t.identifier === this.btnTouch.fire) { this.btnTouch.fire = null; this.firing = false; fireBtn.classList.remove('down'); }
+        if (t.identifier === this.btnTouch.jump) { this.btnTouch.jump = null; this.keys.Space = false; jumpBtn.classList.remove('down'); }
+      }
+    };
+
+    const opts = { passive: false };
+    addEventListener('touchstart', start, opts);
+    addEventListener('touchmove', moveT, opts);
+    addEventListener('touchend', end);
+    addEventListener('touchcancel', end);
+    this.touchCleanup = () => {
+      removeEventListener('touchstart', start, opts);
+      removeEventListener('touchmove', moveT, opts);
+      removeEventListener('touchend', end);
+      removeEventListener('touchcancel', end);
+      resetStick();
+      this.firing = false;
+      this.keys.Space = false;
+      fireBtn.classList.remove('down');
+      jumpBtn.classList.remove('down');
+    };
+  }
+
   checkLock() {
     if (!this.running) return;
+    if (this.touch) { $('click').classList.add('hidden'); return; }
     const locked = document.pointerLockElement === this.renderer.domElement;
     $('click').classList.toggle('hidden', locked || this.st.over);
     if (!locked) { this.firing = false; this.keys = {}; }
@@ -327,6 +421,7 @@ export class Game {
       $('click').classList.add('hidden');
       $('message').classList.remove('on');
       document.exitPointerLock?.();
+      this.firing = false;
       won ? sfx.win() : sfx.lose();
     }
     if (!next.over && prev.over) { $('end').classList.add('hidden'); this.checkLock(); }
@@ -481,7 +576,8 @@ export class Game {
       fz = (k.KeyW || k.ArrowUp ? 1 : 0) - (k.KeyS || k.ArrowDown ? 1 : 0);
       fx = (k.KeyD || k.ArrowRight ? 1 : 0) - (k.KeyA || k.ArrowLeft ? 1 : 0);
     }
-    const len = Math.hypot(fx, fz) || 1;
+    if (alive) { fx += this.stick.x; fz -= this.stick.y; }
+    const len = Math.max(1, Math.hypot(fx, fz));
     const sin = Math.sin(this.yaw);
     const cos = Math.cos(this.yaw);
     const dx = ((fx / len) * cos - (fz / len) * sin) * SPEED * dt;
@@ -572,6 +668,7 @@ export class Game {
     removeEventListener('blur', this.h.blur);
     document.removeEventListener('pointerlockchange', this.h.lockchange);
     $('click').removeEventListener('click', this.h.clickOverlay);
+    this.touchCleanup?.();
     document.exitPointerLock?.();
     this.link.close();
     this.composer.dispose?.();

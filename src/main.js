@@ -3,6 +3,18 @@ import { Game } from './game.js';
 import { createRoom, joinRoom } from './net.js';
 import { unlockAudio } from './audio.js';
 
+// Handys/Tablets: Touch-Steuerung statt Maus + Tastatur
+if (matchMedia('(pointer: coarse)').matches) document.body.classList.add('touch');
+const isTouch = document.body.classList.contains('touch');
+
+// Vollbild + Querformat (wo vom Browser erlaubt) – muss in einem Klick-Handler passieren
+function enterImmersive() {
+  if (!isTouch) return;
+  document.documentElement.requestFullscreen?.()
+    .then(() => screen.orientation?.lock?.('landscape'))
+    .catch(() => {});
+}
+
 const $ = (id) => document.getElementById(id);
 let game = null;
 let pending = null; // laufende Raum-Erstellung / Beitritt
@@ -42,6 +54,7 @@ function startGame(link, isHost) {
 
 $('btn-create').addEventListener('click', () => {
   unlockAudio();
+  enterImmersive();
   setStatus('');
   $('menu-main').classList.add('hidden');
   $('menu-wait').classList.remove('hidden');
@@ -60,6 +73,7 @@ $('btn-create').addEventListener('click', () => {
 
 $('btn-join').addEventListener('click', () => {
   unlockAudio();
+  enterImmersive();
   const code = $('code-input').value.trim().toUpperCase();
   if (code.length !== 5) return setStatus('Bitte den 5-stelligen Raumcode eingeben.');
   roomCode = code;

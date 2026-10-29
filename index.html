@@ -2,7 +2,7 @@
 <html lang="de">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <title>Neon Arena</title>
     <link rel="icon" href="data:," />
     <link rel="stylesheet" href="/src/style.css" />
@@ -31,7 +31,8 @@
 
       <p id="status"></p>
       <p class="help">
-        WASD bewegen &middot; Maus umsehen &middot; Linksklick schießen &middot; Leertaste springen
+        <span class="desktop-only">WASD bewegen &middot; Maus umsehen &middot; Linksklick schießen &middot; Leertaste springen</span>
+        <span class="touch-only">Links wischen = bewegen &middot; Rechts wischen = umsehen &middot; Tasten: Feuer &amp; Sprung<br />Am besten im Querformat</span>
       </p>
     </div>
 
@@ -50,6 +51,9 @@
         <div class="bar"><div id="hp-fill"></div></div>
       </div>
       <div id="message"></div>
+      <div id="stick" class="hidden"><div id="knob"></div></div>
+      <div id="btn-fire" class="tbtn">FEUER</div>
+      <div id="btn-jump" class="tbtn">SPRUNG</div>
     </div>
 
     <div id="click" class="overlay hidden">

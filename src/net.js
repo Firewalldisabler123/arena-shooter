@@ -10,19 +10,7 @@ const STUN = [
   { urls: 'stun:global.stun.twilio.com:3478' },
 ];
 
-// TURN-Relay für Verbindungen zwischen verschiedenen Netzwerken (Schule, Mobilfunk, ...).
-// Die URL wird beim Build per VITE_TURN_URL gesetzt (GitHub-Secret), nicht im Code gespeichert.
-async function loadIceServers() {
-  const url = import.meta.env.VITE_TURN_URL;
-  if (!url) return STUN;
-  try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(6000) });
-    const list = await res.json();
-    return Array.isArray(list) ? [...STUN, ...list] : STUN;
-  } catch {
-    return STUN;
-  }
-}
+const CONFIG = { iceServers: STUN };
 
 const randomCode = () =>
   Array.from({ length: 5 }, () => CHARS[Math.floor(Math.random() * CHARS.length)]).join('');
@@ -49,8 +37,6 @@ class Link {
   }
 }
 
-let iceCache;
-
 // Host: öffnet einen Raum mit zufälligem Code und wartet auf genau einen Gegner.
 export function createRoom({ onCode, onConnect, onError }) {
   let peer;
@@ -58,11 +44,10 @@ export function createRoom({ onCode, onConnect, onError }) {
   let link = null;
   let cancelled = false;
 
-  const open = async () => {
+  const open = () => {
     const code = randomCode();
-    const iceServers = iceCache ||= await loadIceServers();
     if (cancelled) return;
-    peer = new Peer(PREFIX + code, { config: { iceServers } });
+    peer = new Peer(PREFIX + code, { config: CONFIG });
     peer.on('open', () => onCode(code));
     peer.on('error', (e) => {
       if (e.type === 'unavailable-id' && attempts++ < 5) {
@@ -89,8 +74,8 @@ export function createRoom({ onCode, onConnect, onError }) {
 
 // Gast: verbindet sich mit dem Raumcode des Hosts.
 export function joinRoom(code, { onConnect, onError }) {
-  let peer;
   let done = false;
+  let peer;
   const fail = (msg) => {
     if (done) return;
     done = true;
@@ -103,24 +88,20 @@ export function joinRoom(code, { onConnect, onError }) {
     25000,
   );
 
-  (async () => {
-    const iceServers = iceCache ||= await loadIceServers();
-    if (done) return;
-    peer = new Peer({ config: { iceServers } });
-    peer.on('error', (e) => {
-      if (e.type === 'peer-unavailable') fail('Raum nicht gefunden. Code prüfen!');
-      else fail(`Fehler: ${e.type}`);
+  peer = new Peer({ config: CONFIG });
+  peer.on('error', (e) => {
+    if (e.type === 'peer-unavailable') fail('Raum nicht gefunden. Code prüfen!');
+    else fail(`Fehler: ${e.type}`);
+  });
+  peer.on('open', () => {
+    const conn = peer.connect(PREFIX + code.toUpperCase(), OPTS);
+    conn.on('open', () => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      onConnect(new Link(peer, conn));
     });
-    peer.on('open', () => {
-      const conn = peer.connect(PREFIX + code.toUpperCase(), OPTS);
-      conn.on('open', () => {
-        if (done) return;
-        done = true;
-        clearTimeout(timer);
-        onConnect(new Link(peer, conn));
-      });
-    });
-  })();
+  });
 
   return { cancel: () => { done = true; clearTimeout(timer); peer?.destroy(); } };
 }
