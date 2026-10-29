@@ -4,6 +4,26 @@ const PREFIX = 'neon-arena-shooter-';
 const CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const OPTS = { reliable: true, serialization: 'json' };
 
+const STUN = [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun1.l.google.com:19302' },
+  { urls: 'stun:global.stun.twilio.com:3478' },
+];
+
+// TURN-Relay für Verbindungen zwischen verschiedenen Netzwerken (Schule, Mobilfunk, ...).
+// Die URL wird beim Build per VITE_TURN_URL gesetzt (GitHub-Secret), nicht im Code gespeichert.
+async function loadIceServers() {
+  const url = import.meta.env.VITE_TURN_URL;
+  if (!url) return STUN;
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(6000) });
+    const list = await res.json();
+    return Array.isArray(list) ? [...STUN, ...list] : STUN;
+  } catch {
+    return STUN;
+  }
+}
+
 const randomCode = () =>
   Array.from({ length: 5 }, () => CHARS[Math.floor(Math.random() * CHARS.length)]).join('');
 
@@ -29,15 +49,20 @@ class Link {
   }
 }
 
+let iceCache;
+
 // Host: öffnet einen Raum mit zufälligem Code und wartet auf genau einen Gegner.
 export function createRoom({ onCode, onConnect, onError }) {
   let peer;
   let attempts = 0;
   let link = null;
+  let cancelled = false;
 
-  const open = () => {
+  const open = async () => {
     const code = randomCode();
-    peer = new Peer(PREFIX + code);
+    const iceServers = iceCache ||= await loadIceServers();
+    if (cancelled) return;
+    peer = new Peer(PREFIX + code, { config: { iceServers } });
     peer.on('open', () => onCode(code));
     peer.on('error', (e) => {
       if (e.type === 'unavailable-id' && attempts++ < 5) {
@@ -59,34 +84,43 @@ export function createRoom({ onCode, onConnect, onError }) {
   };
   open();
 
-  return { cancel: () => { if (link) link.close(); else peer && peer.destroy(); } };
+  return { cancel: () => { cancelled = true; if (link) link.close(); else peer && peer.destroy(); } };
 }
 
 // Gast: verbindet sich mit dem Raumcode des Hosts.
 export function joinRoom(code, { onConnect, onError }) {
-  const peer = new Peer();
+  let peer;
   let done = false;
   const fail = (msg) => {
     if (done) return;
     done = true;
     clearTimeout(timer);
-    peer.destroy();
+    peer?.destroy();
     onError(msg);
   };
-  const timer = setTimeout(() => fail('Zeitüberschreitung – Raum nicht erreichbar.'), 15000);
+  const timer = setTimeout(
+    () => fail('Zeitüberschreitung – keine direkte Verbindung möglich (Firewall/anderes Netzwerk?).'),
+    25000,
+  );
 
-  peer.on('error', (e) => {
-    if (e.type === 'peer-unavailable') fail('Raum nicht gefunden. Code prüfen!');
-    else fail(`Fehler: ${e.type}`);
-  });
-  peer.on('open', () => {
-    const conn = peer.connect(PREFIX + code.toUpperCase(), OPTS);
-    conn.on('open', () => {
-      if (done) return;
-      done = true;
-      clearTimeout(timer);
-      onConnect(new Link(peer, conn));
+  (async () => {
+    const iceServers = iceCache ||= await loadIceServers();
+    if (done) return;
+    peer = new Peer({ config: { iceServers } });
+    peer.on('error', (e) => {
+      if (e.type === 'peer-unavailable') fail('Raum nicht gefunden. Code prüfen!');
+      else fail(`Fehler: ${e.type}`);
     });
-  });
-  return { cancel: () => { done = true; clearTimeout(timer); peer.destroy(); } };
+    peer.on('open', () => {
+      const conn = peer.connect(PREFIX + code.toUpperCase(), OPTS);
+      conn.on('open', () => {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        onConnect(new Link(peer, conn));
+      });
+    });
+  })();
+
+  return { cancel: () => { done = true; clearTimeout(timer); peer?.destroy(); } };
 }
