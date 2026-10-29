@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Neon Arena</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <canvas id="scene"></canvas>
+
+    <div id="menu" class="overlay">
+      <h1>NEON<span>ARENA</span></h1>
+      <p class="sub">1-gegen-1 &middot; wer dreimal trifft, gewinnt</p>
+
+      <div id="menu-main" class="panel">
+        <button id="btn-create">Spiel erstellen</button>
+        <div class="or">oder</div>
+        <input id="code-input" maxlength="5" placeholder="RAUMCODE" autocomplete="off" spellcheck="false" />
+        <button id="btn-join">Spiel beitreten</button>
+      </div>
+
+      <div id="menu-wait" class="panel hidden">
+        <div class="label">Dein Raumcode</div>
+        <div id="room-code">-----</div>
+        <button id="btn-copy" class="small">Code kopieren</button>
+        <p id="wait-text">Warte auf zweiten Spieler …</p>
+        <button id="btn-cancel" class="small ghost">Abbrechen</button>
+      </div>
+
+      <p id="status"></p>
+      <p class="help">
+        WASD bewegen &middot; Maus umsehen &middot; Linksklick schießen &middot; Leertaste springen
+      </p>
+    </div>
+
+    <div id="hud" class="hidden">
+      <div id="crosshair"></div>
+      <div id="hitmarker"></div>
+      <div id="damage"></div>
+      <div id="scoreboard">
+        <span class="me">DU <b id="score-me">0</b></span>
+        <span class="vs">:</span>
+        <span class="opp"><b id="score-opp">0</b> GEGNER</span>
+      </div>
+      <div id="roomtag">Raum <b id="hud-code"></b></div>
+      <div id="health">
+        <div class="label">LEBEN <b id="hp-num">100</b></div>
+        <div class="bar"><div id="hp-fill"></div></div>
+      </div>
+      <div id="message"></div>
+    </div>
+
+    <div id="click" class="overlay hidden">
+      <h2>Klicke, um zu spielen</h2>
+      <p>Esc gibt die Maus frei</p>
+    </div>
+
+    <div id="end" class="overlay hidden">
+      <h1 id="end-title"></h1>
+      <p id="end-score" class="sub"></p>
+      <div class="panel">
+        <button id="btn-rematch">Revanche</button>
+        <p id="rematch-wait" class="hidden">Warte auf den Host …</p>
+        <button id="btn-menu" class="small ghost">Zurück zum Menü</button>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
